@@ -7,7 +7,8 @@
     max_index/4,
     find_best_action/1,
     select_random_action/1,
-    update_list/3]).
+    update_list/3,
+    create_filled_list/2]).
 
 -record(bandit_state,{bandit_fun, n, expected, greedy_prob, trials}).
 
@@ -19,7 +20,7 @@ init(ArmList, GreedyProb, ExpectedList) ->
         n           = Arms,
         expected    = ExpectedList,
         greedy_prob = GreedyProb,
-        trials      = 0}.
+        trials      = create_filled_list(Arms, 0)}.
 
 max_index([], MaxIndex, _, _) ->
     MaxIndex;
@@ -54,8 +55,13 @@ select(ExpectedList, GreedyProb) ->
 update_list(L, Index, NewElement) ->
     lists:sublist(L, Index - 1) ++ [NewElement] ++ lists:nthtail(Index, L).
 
-%create_filled_list() ->
-    
+create_filled_list(NumEl, Val) ->
+    fill_helper([], NumEl, Val).
+
+fill_helper(Partial, 0, _) ->
+    lists:reverse(Partial);
+fill_helper(Partial, NumEl, Val) ->
+    fill_helper([Val|Partial], NumEl - 1, Val).
 
 average_reward(NewReward, OldAverage, Trials) ->
     ((NewReward - OldAverage) / Trials) + OldAverage. 
@@ -63,31 +69,34 @@ average_reward(NewReward, OldAverage, Trials) ->
 run(State, 0) ->
     State;
 run(State, TrialsRemaining) ->
-    io:format("State ~p, TrialsRemaining~p~n", [State, TrialsRemaining]),
+    %io:format("State ~p, TrialsRemaining ~p~n", [State, TrialsRemaining]),
     % Match the state elements
     #bandit_state{
         bandit_fun  = BanditFun,
         n           = Arms,
         expected    = ExpectedList,
         greedy_prob = GreedyProb,
-        trials      = CompletedTrials} = State,
+        trials      = TrialList} = State,
     % Choose an action
     Action = select(ExpectedList, GreedyProb),
     % Carry out the action
     Reward = BanditFun(Action),
     io:format("Action ~p, Reward ~p~n", [Action, Reward]),
-    NewTrials = CompletedTrials + 1,
+    OldTrials = lists:nth(Action, TrialList),
+    NewTrials = OldTrials + 1,
+    NewTrialList = update_list(TrialList, Action, NewTrials),
+    io:format("NewTrialList ~p~n", [NewTrialList]),
     % Compute the new expected value
     NewValue = average_reward(Reward, lists:nth(Action, ExpectedList), NewTrials),
     % Update the expected value for that action
     NewExpected = update_list(ExpectedList, Action, NewValue),
-    io:format("Expected~p~n", [ExpectedList]),
+    io:format("Expected ~p~n", [ExpectedList]),
     % Update the state record.
     NewState = #bandit_state{
         bandit_fun  = BanditFun,
         n           = Arms,
         expected    = NewExpected,
         greedy_prob = GreedyProb,
-        trials      = NewTrials},
+        trials      = NewTrialList},
     run(NewState, TrialsRemaining - 1).
     
